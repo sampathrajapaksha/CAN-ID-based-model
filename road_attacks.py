@@ -94,6 +94,7 @@ def data_preprocessing(df):
 
 #%%
 # testing dataset pre-processing
+print('fuzzing attack...')
 fuzzing = '/Volumes/Personal/Phd/Data/road/attacks/fuzzing_attack_1.log'
 fuzzing = pd.read_csv(fuzzing, engine='python',header=None)
 fuzzing.columns =['CAN_frame']
@@ -107,13 +108,16 @@ ID_fuzzing['label'] = np.where((ID_fuzzing.time>=A_start)
                             &(ID_fuzzing.payload =='FFFFFFFFFFFFFFFF'),1,0)
 
 ID_fuzzing.reset_index(drop=True, inplace=True)
+ID_fuzzing.name = 'Fuzzing attack'
 
+#df = ID_fuzzing
 # X_test = scaler.fit_transform(ID_fuzzing[cols])
 #
 # X_test, Y_test = to_sequences(X_test, ID_fuzzing['label'].values, seq_size)
 
-#%%
+# **********************************************************************************************************************
 # testing dataset pre-processing
+print('max_speedometer...')
 max_speedometer = '/Volumes/Personal/Phd/Data/road/attacks/max_speedometer_attack_1.log'
 max_speedometer = pd.read_csv(max_speedometer, engine='python',header=None)
 max_speedometer.columns =['CAN_frame']
@@ -127,12 +131,14 @@ ID_speedometer['label'] = np.where((ID_speedometer.time>=A_start)
                             &(ID_speedometer.id=='0D0')
                             &(ID_speedometer.d6=='FF'),1,0)
 ID_speedometer.reset_index(drop=True, inplace=True)
-
+ID_speedometer.name = 'Speedometer attack'
+#df = ID_speedometer
 # X_test = scaler.fit_transform(ID_speedometer[cols])
 #
 # X_test, Y_test = to_sequences(X_test, ID_speedometer['label'].values, seq_size)
 
-#%%
+# **********************************************************************************************************************
+print('max_speedometer_mas...')
 max_speedometer_mas = '/Volumes/Personal/Phd/Data/road/attacks/max_speedometer_attack_1_masquerade.log'
 max_speedometer_mas = pd.read_csv(max_speedometer_mas, engine='python',header=None)
 max_speedometer_mas.columns =['CAN_frame']
@@ -146,12 +152,13 @@ ID_max_speedometer_mas['label'] = np.where((ID_max_speedometer_mas.time>=A_start
                                    &(ID_max_speedometer_mas.id=='0D0')
                                    &(ID_max_speedometer_mas.d6=='FF'),1,0)
 ID_max_speedometer_mas.reset_index(drop=True, inplace=True)
-
+ID_max_speedometer_mas.name = 'Max speedometer mas attack'
 # X_test = scaler.fit_transform(ID_max_speedometer_mas[cols])
 #
 # X_test, Y_test = to_sequences(X_test, ID_max_speedometer_mas['label'].values, seq_size)
 
-#%%
+# **********************************************************************************************************************
+print('corr_sig...')
 corr_sig = '/Volumes/Personal/Phd/Data/road/attacks/correlated_signal_attack_1.log'
 corr_sig = pd.read_csv(corr_sig, engine='python',header=None)
 corr_sig.columns =['CAN_frame']
@@ -165,12 +172,14 @@ ID_corr_sig['label'] = np.where((ID_corr_sig.time>=A_start)
                        &(ID_corr_sig.id=='6E0')
                        &(ID_corr_sig.payload=='595945450000FFFF'),1,0)
 ID_corr_sig.reset_index(drop=True, inplace=True)
-
+ID_corr_sig.name = 'corr_sig attack'
+#df = ID_corr_sig
 # X_test = scaler.fit_transform(ID_corr_sig[cols])
 #
 # X_test, Y_test = to_sequences(X_test, ID_corr_sig['label'].values, seq_size)
 
-#%%
+# **********************************************************************************************************************
+print('corr_sig_mas...')
 corr_sig_mas = '/Volumes/Personal/Phd/Data/road/attacks/correlated_signal_attack_1_masquerade.log'
 corr_sig_mas = pd.read_csv(corr_sig_mas, engine='python',header=None)
 corr_sig_mas.columns =['CAN_frame']
@@ -185,12 +194,13 @@ ID_corr_sig_mas['label'] = np.where((ID_corr_sig_mas.time>=A_start)
                                 &(ID_corr_sig_mas.id=='6E0')
                                 &(ID_corr_sig_mas.payload=='595945450000FFFF'),1,0)
 ID_corr_sig_mas.reset_index(drop=True, inplace=True)
-
+ID_corr_sig_mas.name = 'corr_sig_mas attack'
 # X_test = scaler.fit_transform(ID_corr_sig_mas[cols])
 #
 # X_test, Y_test = to_sequences(X_test, ID_corr_sig_mas['label'].values, seq_size)
 
-#%%
+# **********************************************************************************************************************
+print('reverse_light_on...')
 reverse_light_on = '/Volumes/Personal/Phd/Data/road/attacks/reverse_light_on_attack_1.log'
 reverse_light_on = pd.read_csv(reverse_light_on, engine='python',header=None)
 reverse_light_on.columns =['CAN_frame']
@@ -204,13 +214,14 @@ ID_reverse_light_on['label'] = np.where((ID_reverse_light_on.time>=A_start)
                        &(ID_reverse_light_on.id=='0D0')
                        &(ID_reverse_light_on.d3=='0C'),1,0)
 ID_reverse_light_on.reset_index(drop=True, inplace=True)
-#
+ID_reverse_light_on.name = 'reverse_light_on attack'
 # X_test = scaler.fit_transform(ID_reverse_light_on[cols])
 #
 # X_test, Y_test = to_sequences(X_test, ID_reverse_light_on['label'].values, seq_size)
 
-#%%
-reverse_light_on_mas = '/Volumes/Personal/Phd/Data/road/attacks/reverse_light_on_attack_1.log'
+# **********************************************************************************************************************
+print('reverse_light_on_mas...')
+reverse_light_on_mas = '/Volumes/Personal/Phd/Data/road/attacks/reverse_light_on_attack_1_masquerade.log'
 reverse_light_on_mas = pd.read_csv(reverse_light_on_mas, engine='python',header=None)
 reverse_light_on_mas.columns =['CAN_frame']
 reverse_light_on_mas = data_preprocessing(reverse_light_on_mas)
@@ -223,8 +234,10 @@ ID_reverse_light_on_mas['label'] = np.where((ID_reverse_light_on_mas.time>=A_sta
                                         &(ID_reverse_light_on_mas.id=='0D0')
                                         &(ID_reverse_light_on_mas.d3=='0C'),1,0)
 ID_reverse_light_on_mas.reset_index(drop=True, inplace=True)
+ID_reverse_light_on_mas.name = 'reverse_light_on_mas attack'
 
-#%%
+# **********************************************************************************************************************
+print('reverse_light_off...')
 reverse_light_off = '/Volumes/Personal/Phd/Data/road/attacks/reverse_light_off_attack_1.log'
 reverse_light_off = pd.read_csv(reverse_light_off, engine='python',header=None)
 reverse_light_off.columns =['CAN_frame']
@@ -238,8 +251,10 @@ ID_reverse_light_off['label'] = np.where((ID_reverse_light_off.time>=A_start)
                                         &(ID_reverse_light_off.id=='0D0')
                                         &(ID_reverse_light_off.d3=='04'),1,0)
 ID_reverse_light_off.reset_index(drop=True, inplace=True)
+ID_reverse_light_off.name = 'reverse_light_off attack'
 
-#%%
+# **********************************************************************************************************************
+print('reverse_light_off_mas...')
 reverse_light_off_mas = '/Volumes/Personal/Phd/Data/road/attacks/reverse_light_off_attack_1_masquerade.log'
 reverse_light_off_mas = pd.read_csv(reverse_light_off_mas, engine='python',header=None)
 reverse_light_off_mas.columns =['CAN_frame']
@@ -253,8 +268,10 @@ ID_reverse_light_off_mas['label'] = np.where((ID_reverse_light_off_mas.time>=A_s
                                          &(ID_reverse_light_off_mas.id=='0D0')
                                          &(ID_reverse_light_off_mas.d3=='04'),1,0)
 ID_reverse_light_off_mas.reset_index(drop=True, inplace=True)
+ID_reverse_light_off_mas.name = 'reverse_light_off_mas'
 
-#%%
+# **********************************************************************************************************************
+print('max_engine...')
 max_engine = '/Volumes/Personal/Phd/Data/road/attacks/max_engine_coolant_temp_attack.log'
 max_engine = pd.read_csv(max_engine, engine='python',header=None)
 max_engine.columns =['CAN_frame']
@@ -268,8 +285,10 @@ ID_max_engine['label'] = np.where((ID_max_engine.time>=A_start)
                        &(ID_max_engine.id=='4E7')
                        &(ID_max_engine.d6=='FF'),1,0)
 ID_max_engine.reset_index(drop=True, inplace=True)
+ID_max_engine.name = 'max_engine coolant temp attack'
 
-#%%
+# **********************************************************************************************************************
+print('max_engine_mas...')
 max_engine_mas = '/Volumes/Personal/Phd/Data/road/attacks/max_engine_coolant_temp_attack_masquerade.log'
 max_engine_mas = pd.read_csv(max_engine_mas, engine='python',header=None)
 max_engine_mas.columns =['CAN_frame']
@@ -283,3 +302,4 @@ ID_max_engine_mas['label'] = np.where((ID_max_engine_mas.time>=A_start)
                                   &(ID_max_engine_mas.id=='4E7')
                                   &(ID_max_engine_mas.d6=='FF'),1,0)
 ID_max_engine_mas.reset_index(drop=True, inplace=True)
+ID_max_engine_mas.name = 'max_engine coolant temp mas attack'
