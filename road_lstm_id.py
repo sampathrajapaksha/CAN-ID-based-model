@@ -17,8 +17,9 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 import warnings
 import time
 import seaborn as sns
+from sklearn.svm import OneClassSVM
 
-from road_attacks import ID_speedometer
+# from road_attacks import ID_speedometer
 
 warnings.filterwarnings('ignore')
 from keras.callbacks import EarlyStopping
@@ -47,6 +48,10 @@ def data_preprocessing(df):
 # %%
 # import benign.pkl dataset
 BenTrainSet = pd.read_pickle('/Volumes/Personal/Phd/Data/road/road_benign.pkl')
+# convert payload values to int
+payload_columns = ['d1_int', 'd2_int', 'd3_int', 'd4_int', 'd5_int', 'd6_int', 'd7_int', 'd8_int']
+for i in payload_columns:
+    BenTrainSet[i] = BenTrainSet[i].astype('int')
 print('dataset imported')
 # BenTrainSet = BenTrainSet[BenTrainSet.id!='FFF']
 
@@ -55,17 +60,48 @@ train.reset_index(drop=True, inplace=True)
 print('train size ', train.shape)
 
 # %%
+# # create payload and time rule based features (max min values)
+# # define max values for each payload value
+# max_d1 = dict(BenTrainSet.groupby('id')['d1_int'].max())
+# max_d2 = dict(BenTrainSet.groupby('id')['d2_int'].max())
+# max_d3 = dict(BenTrainSet.groupby('id')['d3_int'].max())
+# max_d4 = dict(BenTrainSet.groupby('id')['d4_int'].max())
+# max_d5 = dict(BenTrainSet.groupby('id')['d5_int'].max())
+# max_d6 = dict(BenTrainSet.groupby('id')['d6_int'].max())
+# max_d7 = dict(BenTrainSet.groupby('id')['d7_int'].max())
+# max_d8 = dict(BenTrainSet.groupby('id')['d8_int'].max())
+#
+# # create a df of max values and add all values as columns
+# max_df = pd.DataFrame(max_d1.items(), columns=['id', 'max_d1'])
+# max_cols = [max_d2, max_d3, max_d4, max_d5, max_d6, max_d7, max_d8]
+# for i in range(len(max_cols)):
+#     max_df['max_d' + str(i + 2)] = max_df['id'].map(max_cols[i]).astype('int')  # i+2 to start with max_d2
+
+# time based features
+BenTrainSet['ID_time_diff'] = BenTrainSet['ID_time_diff'].fillna(0)
+max_time = dict(BenTrainSet.groupby('id')['ID_time_diff'].quantile(0.999)) # max values have outliers
+min_time = dict(BenTrainSet.groupby('id')['ID_time_diff'].min())
+max_time_df = pd.DataFrame(max_time.items(), columns=['id', 'max_time'])
+max_time_df['min_time'] = max_time_df['id'].map(min_time)
+
+# %%
+# load models ( 6 context model - best results)
+model = load_model('/Volumes/Personal/Phd/Results/models/LSTM/load_lstm_id_model.h5')
+history = pickle.load(open("/Volumes/Personal/Phd/Results/models/LSTM/load_lstm_id_history.pkl", "rb"))
+tokenizer = pickle.load(open("/Volumes/Personal/Phd/Results/models/LSTM/road_lstm_tok.pkl", "rb"))
+
+# %%
 benign_df = train.copy()
 
 # convert df data into a series
 tempId = pd.Series(benign_df['id'])
 tempId = tempId.str.cat(sep=' ')
 
-tokenizer = Tokenizer(oov_token=True)
-tokenizer.fit_on_texts([tempId])
-
-# saving the tokenizer for predict function.
-pickle.dump(tokenizer, open('/Volumes/Personal/Phd/Results/models/LSTM/road_lstm_tok.pkl', 'wb'))
+# tokenizer = Tokenizer(oov_token=True)
+# tokenizer.fit_on_texts([tempId])
+#
+# # saving the tokenizer for predict function.
+# pickle.dump(tokenizer, open('/Volumes/Personal/Phd/Results/models/LSTM/road_lstm_tok_2.pkl', 'wb'))
 
 sequence_data = tokenizer.texts_to_sequences([tempId])[0]
 
@@ -79,11 +115,11 @@ def seq(sequence_data):
     sequences = []
     # for 2 context ids beside center id
     # j to defined the context window, 2 for one context word from one side, 4 for 2 context words
-    j = 6
+    j = 10
     for i in range(j, len(sequence_data)):
         words = sequence_data[i - j:i + 1]
         sequences.append(words)
-    print(sequences[0:2])
+
     # print("The Length of sequences are: ", len(sequences))
     sequences = np.array(sequences)
 
@@ -97,12 +133,12 @@ def seq(sequence_data):
     #     y.append(i[1])  # select center id as y
 
     # for j context ids beside center id
-    k = int(j/2)
+    k = int(j / 2)
     for i in range(len(sequences)):
         X.append(list((np.delete(sequences[i], k, 0).flatten())))
 
     for i in sequences:
-        y.append(i[k]) # select center id as y
+        y.append(i[k])  # select center id as y
 
     X = np.array(X)
     y = np.array(y)
@@ -120,10 +156,10 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.005, rando
 j = 6
 model = Sequential()
 model.add(Embedding(vocab_size, 100, input_length=j))
-#model.add((LSTM(300, return_sequences=True)))
+# model.add((LSTM(300, return_sequences=True)))
 model.add((GRU(256, return_sequences=False)))
 model.add(Dropout(0.3))
-#model.add((GRU(256, return_sequences=False)))
+# model.add((GRU(256, return_sequences=False)))
 model.add(Dense(128, activation="relu"))
 model.add(Dense(vocab_size, activation="softmax"))
 
@@ -131,16 +167,16 @@ model.compile(loss="categorical_crossentropy", optimizer=Adam(lr=0.001), metrics
 es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=3)
 history = model.fit(X_train, y_train, epochs=5, batch_size=512, validation_split=0.3, callbacks=[es]).history
 
-model.save('/Volumes/Personal/Phd/Results/models/LSTM/load_lstm_id_model.h5')
-pickle.dump(history, open("/Volumes/Personal/Phd/Results/models/LSTM/load_lstm_id_history.pkl", "wb"))
+model.save('/Volumes/Personal/Phd/Results/models/LSTM/load_lstm_id_model_2.h5')
+pickle.dump(history, open("/Volumes/Personal/Phd/Results/models/LSTM/load_lstm_id_history_2.pkl", "wb"))
 
-#%%
+# %%
 # load saved models from dgx
-model = load_model('/Volumes/Personal/Phd/Results/models/LSTM/dgx_models/xx.h5')
-history = pickle.load(open("/Volumes/Personal/Phd/Results/models/LSTM/dgx_models/xx.pkl", "rb"))
-tokenizer = pickle.load(open("/Volumes/Personal/Phd/Results/models/LSTM/dgx_models/xx.pkl", "rb"))
+model = load_model('/Volumes/Personal/Phd/Results/models/LSTM/dgx_models/lstm_word2vec_model.h5')
+history = pickle.load(open("/Volumes/Personal/Phd/Results/models/LSTM/dgx_models/lstm_word2vec_history.pkl", "rb"))
+tokenizer = pickle.load(open("/Volumes/Personal/Phd/Results/models/LSTM/dgx_models/tokenizer_word2vec.pkl", "rb"))
 
-#%%
+# %%
 
 plt.plot(history['accuracy'])
 plt.plot(history['val_accuracy'])
@@ -158,6 +194,7 @@ plt.xlabel('epoch')
 plt.legend(['train', 'test'], loc='upper left')
 plt.show()
 
+
 # %%
 # prediction
 def winRatio(tempData):
@@ -167,12 +204,12 @@ def winRatio(tempData):
     pred_label_1 = len(tempData[tempData['pred_class'] == 1])
     pred_label_all = len(tempData)
 
-    if true_label_1 / true_label_all > 0.001:
+    if true_label_1 / true_label_all > 0.01:
         true_label = 1
     else:
         true_label = 0
 
-    if pred_label_1 / pred_label_all > 0.001:
+    if pred_label_1 / pred_label_all > 0.01:
         pred_label = 1
     else:
         pred_label = 0
@@ -181,36 +218,32 @@ def winRatio(tempData):
 
 
 # prediction function
-def results_evaluation(pred_RPM, eval_df, y, winRatio):
+def results_evaluation(pred_RPM, eval_df, y, winRatio, id_threshold_dic, threshold_all):
     # best prediction
-    y_pred = np.argmax(pred_RPM, axis=1)
-
-    # # best N predictions
-    # pred_list = []
-    # for i in range(len(pred_RPM)):
-    #     y_pred_max = (-pred_RPM[i]).argsort()[:90]  # (- to get the descending order)
-    #     pred_list.append(y_pred_max)
-
-    pred_list = []
+    pred_prob = []
     for i in range(len(pred_RPM)):
-      y_pred_max = np.argwhere(pred_RPM[i]> 0.000005)
-      pred_list.append(y_pred_max)
+        id_prob = pred_RPM[i][y[i]]  # tokenizer.word_index to get the mapping of id and index
+        pred_prob.append(id_prob)
 
-    eval_df['predict_id'] = y_pred
     eval_df['true_id'] = y
-    eval_df['pred_all'] = pred_list
-    eval_df['one_class'] = np.where(eval_df['true_id'] == eval_df['predict_id'], 0, 1)
+    eval_df['id_pred_prob'] = pred_prob
+    eval_df['threshold'] = eval_df['id'].map(id_threshold_dic)
+    eval_df['threshold'] = eval_df['threshold'].astype('float')
+    eval_df['threshold'] = eval_df['threshold'].fillna(1)
 
-    pred_label = []
-    for i in range(len(y)):
-        if y[i] in pred_list[i]:
-            pred_class = 0
-            pred_label.append(pred_class)
-        else:
-            pred_class = 1
-            pred_label.append(pred_class)
+    # pred class
+    # eval_df['pred_class'] = np.where(eval_df['id_pred_prob'] <= eval_df['threshold'], 1, 0)
+    # threshold considering all IDs
+    # eval_df['pred_class'] = np.where(eval_df['id_pred_prob'] <= threshold_all, 1, 0)
+    # time pred class
+    # eval_df['pred_class'] = eval_df['time_pred_class']
+    # payload pred class
+    eval_df['pred_class'] = eval_df['payload_pred_class']
 
-    eval_df['pred_class'] = pred_label
+    # # OCSVM prediction
+    # pred_ocsvm = model_ocsvm.predict(eval_df[['id_pred_prob']])
+    # pred_ocsvm = np.where(pred_ocsvm==1,0,1)
+    # eval_df['pred_class'] = pred_ocsvm
 
     windowSize = 0.1
     numWindows = (eval_df.time.max() - eval_df.time.min()) / windowSize
@@ -231,6 +264,7 @@ def results_evaluation(pred_RPM, eval_df, y, winRatio):
         startValue = stopValue
         stopValue = startValue + windowSize
 
+    # ratio return 2 lists, true window at 0 and pred_window at 1
     true_window = []
     for i in range(len(ratio_list)):
         l = ratio_list[i][0]
@@ -245,7 +279,7 @@ def results_evaluation(pred_RPM, eval_df, y, winRatio):
     tot_time = end - start
     print('Total prediction time :', tot_time)
     print('Time for one frame :', tot_time / len(eval_df))
-    print(accuracy_score(y, y_pred))
+    print(accuracy_score(eval_df['label'], eval_df['pred_class']))
 
     return true_window, pred_window
 
@@ -257,7 +291,7 @@ df_extended_short = pd.read_csv(extended_short, engine='python', header=None)
 df_extended_short.columns = ['CAN_frame']
 df_extended_short = data_preprocessing(df_extended_short)
 
-cols = ['id','payload','time','time_abs','ID_time_diff','label']
+cols = ['id', 'payload', 'time', 'time_abs', 'ID_time_diff', 'label']
 df = df_extended_short[cols]
 
 # convert df data into a series
@@ -266,67 +300,102 @@ BenId = BenId.str.cat(sep=' ')
 
 sequence_data = tokenizer.texts_to_sequences([BenId])[0]
 X, y = seq(sequence_data)
-eval_df = df[3:-3] # 3 - no of context words
+eval_df_benign = df[5:-5]  # 3 - no of context words
 
 pred_RPM = model.predict(X)
-eval_df['true_id'] = y
+eval_df_benign['true_id'] = y
 
 # find the predicted probability for each ID
 pred_prob = []
 for i in range(len(pred_RPM)):
-    id_prob = pred_RPM[i][y[i]] # tokenizer.word_index to get the mapping of id and index
+    id_prob = pred_RPM[i][y[i]]  # tokenizer.word_index to get the mapping of id and index
     pred_prob.append(id_prob)
 
-eval_df['id_pred_prob'] = pred_prob
-#%%
+eval_df_benign['id_pred_prob'] = pred_prob
+threshold_all = eval_df_benign['id_pred_prob'].quantile(0.0003)
+
 # threshold calculation for each id
 start = time.time()
-threshold_df = eval_df.groupby('id')['id_pred_prob'].min()
+threshold_df = eval_df_benign.groupby('id')['id_pred_prob'].min()
 id_threshold_dic = dict(threshold_df)
 end = time.time()
-tot_time = end-start
-print('groupby time : ', tot_time )
-#%%
+tot_time = end - start
+print('groupby time : ', tot_time)
+
+# %%
+# train a OCSVM for time and pred_prob
+# df_ocsvm = eval_df_benign[['id_pred_prob']]
+# model_ocsvm = OneClassSVM(kernel = 'rbf', gamma = 100, nu = 0.01).fit(df_ocsvm.head(100000))
+
+
+# %%
 # density plot
-df_id = eval_df[eval_df.id=='4E7']
-plt.figure(figsize=(10,6), dpi=80)
-plt.title('density plot', fontsize=16)
-sns.distplot(df_id['id_pred_prob'], bins = 20, kde= True, color = 'blue');
+df_id = eval_df[eval_df.id == '0D0']
+plt.figure(figsize=(10, 6), dpi=80)
+plt.title('density plot 0D0', fontsize=16)
+sns.distplot(df_id['id_pred_prob'], bins=20, kde=True, color='blue');
 plt.show()
 
-#%%
-
-# attacks = [ID_fuzzing, ID_speedometer, ID_max_speedometer_mas, ID_corr_sig, ID_corr_sig_mas, ID_reverse_light_on,
-#            ID_reverse_light_on_mas, ID_reverse_light_off, ID_reverse_light_off_mas, ID_max_engine,
-#            ID_max_engine_mas]
+# %%
+#
+attacks = [ID_speedometer, ID_max_speedometer_mas, ID_corr_sig, ID_corr_sig_mas, ID_reverse_light_on,
+           ID_reverse_light_on_mas, ID_reverse_light_off, ID_reverse_light_off_mas]
 
 # attacks = [ID_max_engine, ID_max_engine_mas]
+#attacks = [ID_corr_sig]
 #
-# for i in attacks:
-#     # convert df data into a series
-#     print('Attack : ', i.name)
-#     df = i
-#     BenId = pd.Series(df['id'])
-#     BenId = BenId.str.cat(sep=' ')
-#
-#     sequence_data = tokenizer.texts_to_sequences([BenId])[0]
-#     X, y = seq(sequence_data)
-#     eval_df = df[3:-3]
-#
-#     start = time.time()
-#     pred_RPM = model.predict(X)
-#     end = time.time()
-#     tot_time = end - start
-#     print('Total time :', tot_time)
-#     print('Time for one frame :', tot_time / len(ID_speedometer))
-#
-#
-#     true_window, pred_window = results_evaluation(pred_RPM, eval_df, y, winRatio)
-#     print(classification_report(true_window, pred_window))
-#     cm = confusion_matrix(true_window, pred_window)
-#     print(cm)
-#     print('New attack data loading....')
-#     print('**************************************************')
-#     print()
+for i in attacks:
+    # convert df data into a series
+    print('Attack : ', i.name)
+    df = i
+    BenId = pd.Series(df['id'])
+    BenId = BenId.str.cat(sep=' ')
 
-#%%
+    sequence_data = tokenizer.texts_to_sequences([BenId])[0]
+    X, y = seq(sequence_data)
+    eval_df = df[5:-5]
+
+    # join max_df into eval_df to detect point anomalies in payload
+    # eval_df = eval_df.merge(max_df, on ='id', how='left')
+    # # check for payload point anomalies
+    # eval_df['payload_pred_class'] = np.where(((eval_df.d1_int>eval_df.max_d1)|
+    #                                         (eval_df.d2_int>eval_df.max_d2)|
+    #                                         (eval_df.d3_int>eval_df.max_d3)|
+    #                                         (eval_df.d4_int>eval_df.max_d4)|
+    #                                         (eval_df.d5_int>eval_df.max_d5)|
+    #                                         (eval_df.d6_int>eval_df.max_d6)|
+    #                                         (eval_df.d7_int>eval_df.max_d7)|
+    #                                         (eval_df.d8_int>eval_df.max_d8)),1,0)
+
+
+
+
+    # join max_time_df into eval_df to detect point anomalies in time
+    eval_df = eval_df.merge(max_time_df, on ='id', how='left')
+    eval_df['time_pred_class'] = np.where((eval_df.ID_time_diff>eval_df.max_time)|
+                                           (eval_df.ID_time_diff<eval_df.min_time),1,0)
+
+    start = time.time()
+    pred_RPM = model.predict(X)
+    end = time.time()
+    tot_time = end - start
+    print('Total time :', tot_time)
+    print('Time for one frame :', tot_time / len(ID_speedometer))
+
+    true_window, pred_window = results_evaluation(pred_RPM, eval_df, y, winRatio, id_threshold_dic, threshold_all)
+    print(classification_report(true_window, pred_window))
+    cm = confusion_matrix(true_window, pred_window)
+    print(cm)
+    print('New attack data loading....')
+    print('**************************************************')
+    print()
+
+# %%
+# # test ocsvm
+# df_att = eval_df[['id_pred_prob']]
+# y_pred_ocsvm = model_ocsvm.predict(df_att)
+# y_pred_ocsvm = np.where(y_pred_ocsvm==1,0,1)
+#
+# print(classification_report(eval_df['label'], y_pred_ocsvm))
+# cm = confusion_matrix(eval_df['label'], y_pred_ocsvm)
+# print(cm)
