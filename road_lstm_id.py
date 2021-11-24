@@ -59,23 +59,28 @@ train = BenTrainSet[:10000000]
 train.reset_index(drop=True, inplace=True)
 print('train size ', train.shape)
 
-# %%
-# # create payload and time rule based features (max min values)
-# # define max values for each payload value
-# max_d1 = dict(BenTrainSet.groupby('id')['d1_int'].max())
-# max_d2 = dict(BenTrainSet.groupby('id')['d2_int'].max())
-# max_d3 = dict(BenTrainSet.groupby('id')['d3_int'].max())
-# max_d4 = dict(BenTrainSet.groupby('id')['d4_int'].max())
-# max_d5 = dict(BenTrainSet.groupby('id')['d5_int'].max())
-# max_d6 = dict(BenTrainSet.groupby('id')['d6_int'].max())
-# max_d7 = dict(BenTrainSet.groupby('id')['d7_int'].max())
-# max_d8 = dict(BenTrainSet.groupby('id')['d8_int'].max())
-#
-# # create a df of max values and add all values as columns
-# max_df = pd.DataFrame(max_d1.items(), columns=['id', 'max_d1'])
-# max_cols = [max_d2, max_d3, max_d4, max_d5, max_d6, max_d7, max_d8]
-# for i in range(len(max_cols)):
-#     max_df['max_d' + str(i + 2)] = max_df['id'].map(max_cols[i]).astype('int')  # i+2 to start with max_d2
+#%%
+# create payload and time rule based features (max min values)
+# define max values for each payload value
+max_d1 = dict(BenTrainSet.groupby('id')['d1_int'].max())
+max_d2 = dict(BenTrainSet.groupby('id')['d2_int'].max())
+max_d2['2B4'] = 255
+max_d3 = dict(BenTrainSet.groupby('id')['d3_int'].max())
+max_d4 = dict(BenTrainSet.groupby('id')['d4_int'].max())
+max_d5 = dict(BenTrainSet.groupby('id')['d5_int'].max())
+max_d6 = dict(BenTrainSet.groupby('id')['d6_int'].max())
+max_d6['03A'] = 255
+max_d7 = dict(BenTrainSet.groupby('id')['d7_int'].max())
+max_d8 = dict(BenTrainSet.groupby('id')['d8_int'].max())
+
+# create a df of max values and add all values as columns
+max_df = pd.DataFrame(max_d1.items(), columns=['id', 'max_d1'])
+max_cols = [max_d2, max_d3, max_d4, max_d5, max_d6, max_d7, max_d8]
+for i in range(len(max_cols)):
+    max_df['max_d' + str(i + 2)] = max_df['id'].map(max_cols[i]).astype('int')  # i+2 to start with max_d2
+
+# difference with previous raw by groups
+# eval_df_check['d1_diff'] = eval_df_check.groupby('id')['d1_int'].diff()
 
 # time based features
 BenTrainSet['ID_time_diff'] = BenTrainSet['ID_time_diff'].fillna(0)
@@ -145,7 +150,7 @@ def seq(sequence_data):
 
     return X, y
 
-
+#%%
 X, y = seq(sequence_data)
 y = to_categorical(y, num_classes=vocab_size)
 
@@ -153,7 +158,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.005, rando
 
 # %%
 # model training
-j = 6
+j = 10
 model = Sequential()
 model.add(Embedding(vocab_size, 100, input_length=j))
 # model.add((LSTM(300, return_sequences=True)))
@@ -204,12 +209,13 @@ def winRatio(tempData):
     pred_label_1 = len(tempData[tempData['pred_class'] == 1])
     pred_label_all = len(tempData)
 
-    if true_label_1 / true_label_all > 0.01:
+    label_ratio = 0.001 # change for low frequent attacks
+    if true_label_1 / true_label_all > label_ratio:
         true_label = 1
     else:
         true_label = 0
 
-    if pred_label_1 / pred_label_all > 0.01:
+    if pred_label_1 / pred_label_all > label_ratio:
         pred_label = 1
     else:
         pred_label = 0
@@ -232,13 +238,13 @@ def results_evaluation(pred_RPM, eval_df, y, winRatio, id_threshold_dic, thresho
     eval_df['threshold'] = eval_df['threshold'].fillna(1)
 
     # pred class
-    # eval_df['pred_class'] = np.where(eval_df['id_pred_prob'] <= eval_df['threshold'], 1, 0)
+    eval_df['pred_class'] = np.where(eval_df['id_pred_prob'] <= eval_df['threshold'], 1, 0)
     # threshold considering all IDs
     # eval_df['pred_class'] = np.where(eval_df['id_pred_prob'] <= threshold_all, 1, 0)
     # time pred class
     # eval_df['pred_class'] = eval_df['time_pred_class']
     # payload pred class
-    eval_df['pred_class'] = eval_df['payload_pred_class']
+    # eval_df['pred_class'] = eval_df['payload_pred_class']
 
     # # OCSVM prediction
     # pred_ocsvm = model_ocsvm.predict(eval_df[['id_pred_prob']])
@@ -275,10 +281,10 @@ def results_evaluation(pred_RPM, eval_df, y, winRatio, id_threshold_dic, thresho
         l = ratio_list[i][1]
         pred_window.append(l)
 
-    end = time.time()
-    tot_time = end - start
-    print('Total prediction time :', tot_time)
-    print('Time for one frame :', tot_time / len(eval_df))
+    # end = time.time()
+    # tot_time = end - start
+    # print('Total prediction time :', tot_time)
+    # print('Time for one frame :', tot_time / len(eval_df))
     print(accuracy_score(eval_df['label'], eval_df['pred_class']))
 
     return true_window, pred_window
@@ -291,8 +297,12 @@ df_extended_short = pd.read_csv(extended_short, engine='python', header=None)
 df_extended_short.columns = ['CAN_frame']
 df_extended_short = data_preprocessing(df_extended_short)
 
+start = time.time()
 cols = ['id', 'payload', 'time', 'time_abs', 'ID_time_diff', 'label']
 df = df_extended_short[cols]
+
+# get train dataset to define threshold
+# df = train
 
 # convert df data into a series
 BenId = pd.Series(df['id'])
@@ -312,10 +322,10 @@ for i in range(len(pred_RPM)):
     pred_prob.append(id_prob)
 
 eval_df_benign['id_pred_prob'] = pred_prob
-threshold_all = eval_df_benign['id_pred_prob'].quantile(0.0003)
+threshold_all = eval_df_benign['id_pred_prob'].quantile(0.001)
 
 # threshold calculation for each id
-start = time.time()
+
 threshold_df = eval_df_benign.groupby('id')['id_pred_prob'].min()
 id_threshold_dic = dict(threshold_df)
 end = time.time()
@@ -338,11 +348,11 @@ plt.show()
 
 # %%
 #
-attacks = [ID_speedometer, ID_max_speedometer_mas, ID_corr_sig, ID_corr_sig_mas, ID_reverse_light_on,
+attacks = [ID_fuzzing, ID_speedometer, ID_max_speedometer_mas, ID_corr_sig, ID_corr_sig_mas, ID_reverse_light_on,
            ID_reverse_light_on_mas, ID_reverse_light_off, ID_reverse_light_off_mas]
 
-# attacks = [ID_max_engine, ID_max_engine_mas]
-#attacks = [ID_corr_sig]
+attacks = [ID_max_engine, ID_max_engine_mas]
+attacks = [ID_max_engine_mas]
 #
 for i in attacks:
     # convert df data into a series
@@ -351,23 +361,22 @@ for i in attacks:
     BenId = pd.Series(df['id'])
     BenId = BenId.str.cat(sep=' ')
 
+    start = time.time()
     sequence_data = tokenizer.texts_to_sequences([BenId])[0]
     X, y = seq(sequence_data)
     eval_df = df[5:-5]
 
     # join max_df into eval_df to detect point anomalies in payload
-    # eval_df = eval_df.merge(max_df, on ='id', how='left')
-    # # check for payload point anomalies
-    # eval_df['payload_pred_class'] = np.where(((eval_df.d1_int>eval_df.max_d1)|
-    #                                         (eval_df.d2_int>eval_df.max_d2)|
-    #                                         (eval_df.d3_int>eval_df.max_d3)|
-    #                                         (eval_df.d4_int>eval_df.max_d4)|
-    #                                         (eval_df.d5_int>eval_df.max_d5)|
-    #                                         (eval_df.d6_int>eval_df.max_d6)|
-    #                                         (eval_df.d7_int>eval_df.max_d7)|
-    #                                         (eval_df.d8_int>eval_df.max_d8)),1,0)
-
-
+    eval_df = eval_df.merge(max_df, on ='id', how='left')
+    # check for payload point anomalies
+    eval_df['payload_pred_class'] = np.where(((eval_df.d1_int>eval_df.max_d1)|
+                                            (eval_df.d2_int>eval_df.max_d2)|
+                                            (eval_df.d3_int>eval_df.max_d3)|
+                                            (eval_df.d4_int>eval_df.max_d4)|
+                                            (eval_df.d5_int>eval_df.max_d5)|
+                                            (eval_df.d6_int>eval_df.max_d6)|
+                                            (eval_df.d7_int>eval_df.max_d7)|
+                                            (eval_df.d8_int>eval_df.max_d8)),1,0)
 
 
     # join max_time_df into eval_df to detect point anomalies in time
@@ -375,27 +384,50 @@ for i in attacks:
     eval_df['time_pred_class'] = np.where((eval_df.ID_time_diff>eval_df.max_time)|
                                            (eval_df.ID_time_diff<eval_df.min_time),1,0)
 
-    start = time.time()
+
     pred_RPM = model.predict(X)
+
+
+    true_window, pred_window = results_evaluation(pred_RPM, eval_df, y, winRatio, id_threshold_dic, threshold_all)
+
+    gru_list = pred_window
+    # time_list = pred_window
+    # payload_list = pred_window
+
+    # latency calculation
     end = time.time()
     tot_time = end - start
     print('Total time :', tot_time)
-    print('Time for one frame :', tot_time / len(ID_speedometer))
+    print('Time for one frame :', tot_time / len(eval_df))
 
-    true_window, pred_window = results_evaluation(pred_RPM, eval_df, y, winRatio, id_threshold_dic, threshold_all)
     print(classification_report(true_window, pred_window))
     cm = confusion_matrix(true_window, pred_window)
     print(cm)
+
+    TN = cm[0][0]
+    FN = cm[1][0]
+    TP = cm[1][1]
+    FP = cm[0][1]
+    print('FP rate', FP*100/(FP+TN))
+    print('FN rate', FN*100/(FN+TP))
+
     print('New attack data loading....')
     print('**************************************************')
     print()
 
 # %%
-# # test ocsvm
-# df_att = eval_df[['id_pred_prob']]
-# y_pred_ocsvm = model_ocsvm.predict(df_att)
-# y_pred_ocsvm = np.where(y_pred_ocsvm==1,0,1)
-#
-# print(classification_report(eval_df['label'], y_pred_ocsvm))
-# cm = confusion_matrix(eval_df['label'], y_pred_ocsvm)
-# print(cm)
+# ensemble model
+# true_window , gru_list, payload_list, time_list
+
+or_list = [a or b or c for a,b,c in zip(gru_list, time_list, payload_list)]
+
+print(classification_report(true_window, or_list))
+cm = confusion_matrix(true_window, or_list)
+print(cm)
+
+TN = cm[0][0]
+FN = cm[1][0]
+TP = cm[1][1]
+FP = cm[0][1]
+print('FP rate', FP*100/(FP+TN))
+print('FN rate', FN*100/(FN+TP))
