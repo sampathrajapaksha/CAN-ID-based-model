@@ -237,14 +237,14 @@ def results_evaluation(pred_RPM, eval_df, y, winRatio, id_threshold_dic, thresho
     eval_df['threshold'] = eval_df['threshold'].fillna(1)
 
     # ID based threshold pred class
-    eval_df['pred_class'] = np.where(eval_df['id_pred_prob'] <= eval_df['threshold'], 1, 0)
+    # eval_df['pred_class'] = np.where(eval_df['id_pred_prob'] <= eval_df['threshold'], 1, 0)
 
     # threshold considering all IDs
     # eval_df['pred_class'] = np.where(eval_df['id_pred_prob'] <= threshold_all, 1, 0)
 
     # time pred class
-    # eval_df['min_time'] = eval_df['min_time'].fillna(1)
-    # eval_df['pred_class'] = eval_df['time_pred_class']
+    eval_df['min_time'] = eval_df['min_time'].fillna(1)
+    eval_df['pred_class'] = eval_df['time_pred_class']
 
     # payload pred class
     # eval_df['pred_class'] = eval_df['payload_pred_class']
@@ -352,7 +352,8 @@ for i in attacks:
     # join max_time_df into eval_df to detect point anomalies in time
     eval_df = eval_df.merge(max_time_df, on ='id', how='left')
     eval_df['time_pred_class'] = np.where((eval_df.ID_time_diff>eval_df.max_time)|
-                                          (eval_df.ID_time_diff<eval_df.min_time),1,0)
+                                          (eval_df.ID_time_diff<=eval_df.min_time)|
+                                          (eval_df.max_time.isnull()),1,0)
 
 
     pred_RPM = model.predict(X)
