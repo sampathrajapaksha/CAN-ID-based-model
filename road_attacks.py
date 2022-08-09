@@ -49,9 +49,9 @@ def data_preprocessing(df):
 
     # create features for time difference and time diff for each id
     df['time_dif'] = df['time_abs'].diff()
-    df['time_dif'] = df['time_dif'].fillna(df['time_dif'].mean())
-    df[['ID_time_diff']] = df.groupby('id')['time_abs'].diff()
-    df['ID_time_diff'] = df['ID_time_diff'].fillna(df.groupby('id')['ID_time_diff'].transform('mean'))
+    # df['time_dif'] = df['time_dif'].fillna(df['time_dif'].mean())
+    # df[['ID_time_diff']] = df.groupby('id')['time_abs'].diff()
+    # df['ID_time_diff'] = df['ID_time_diff'].fillna(df.groupby('id')['ID_time_diff'].transform('mean'))
 
     df['d1'] = df['payload'].str[:2].astype('category')
     df['d2'] = df['payload'].str[2:4].astype('category')
@@ -72,30 +72,29 @@ def data_preprocessing(df):
         return val
 
     # convert hex signal to int signal
-    df['id_int'] = df['id'].apply(hex_to_int)
-    df['d1_int'] = df['d1'].apply(hex_to_int)
-    df['d2_int'] = df['d2'].apply(hex_to_int)
-    df['d3_int'] = df['d3'].apply(hex_to_int)
-    df['d4_int'] = df['d4'].apply(hex_to_int)
-    df['d5_int'] = df['d5'].apply(hex_to_int)
-    df['d6_int'] = df['d6'].apply(hex_to_int)
-    df['d7_int'] = df['d7'].apply(hex_to_int)
-    df['d8_int'] = df['d8'].apply(hex_to_int)
+    df['id_int'] = df['id'].apply(hex_to_int).astype('int')
+    df['d1_int'] = df['d1'].apply(hex_to_int).astype('int')
+    df['d2_int'] = df['d2'].apply(hex_to_int).astype('int')
+    df['d3_int'] = df['d3'].apply(hex_to_int).astype('int')
+    df['d4_int'] = df['d4'].apply(hex_to_int).astype('int')
+    df['d5_int'] = df['d5'].apply(hex_to_int).astype('int')
+    df['d6_int'] = df['d6'].apply(hex_to_int).astype('int')
+    df['d7_int'] = df['d7'].apply(hex_to_int).astype('int')
+    df['d8_int'] = df['d8'].apply(hex_to_int).astype('int')
 
     # convert id to binary
-    df['id_bin'] = df['id'].apply(hex_to_bin)
-    for i in range(12):
-        df['id_'+ str(i)] = df['id_bin'].str[i].astype('category')
+    # df['id_bin'] = df['id'].apply(hex_to_bin)
+    # for i in range(12):
+    #     df['id_'+ str(i)] = df['id_bin'].str[i].astype('category')
 
     sorted_df = df.sort_values(by=['time'])
-
 
     return sorted_df
 
 #%%
 # testing dataset pre-processing
 print('fuzzing attack...')
-fuzzing = '/Volumes/Personal/Phd/Data/road/attacks/fuzzing_attack_1.log'
+fuzzing = '/Users/sampathrajapaksha/Document-local/PhD/Data/road/attacks/fuzzing_attack_1.log'
 fuzzing = pd.read_csv(fuzzing, engine='python',header=None)
 fuzzing.columns =['CAN_frame']
 fuzzing = data_preprocessing(fuzzing)
@@ -115,10 +114,11 @@ ID_fuzzing.name = 'Fuzzing attack'
 #
 # X_test, Y_test = to_sequences(X_test, ID_fuzzing['label'].values, seq_size)
 
+
 # **********************************************************************************************************************
 # testing dataset pre-processing
 print('max_speedometer...')
-max_speedometer = '/Volumes/Personal/Phd/Data/road/attacks/max_speedometer_attack_1.log'
+max_speedometer = '/Users/sampathrajapaksha/Document-local/PhD/Data/road/attacks/max_speedometer_attack_1.log'
 max_speedometer = pd.read_csv(max_speedometer, engine='python',header=None)
 max_speedometer.columns =['CAN_frame']
 max_speedometer = data_preprocessing(max_speedometer)
@@ -126,11 +126,16 @@ max_speedometer = data_preprocessing(max_speedometer)
 ID_speedometer = max_speedometer
 A_start = 1110000042.009204
 A_end = 1110000066.449010
+# A_start = 42.009204
+# A_end = 66.449010
 ID_speedometer['label'] = np.where((ID_speedometer.time>=A_start)
                             &(ID_speedometer.time<=A_end)
                             &(ID_speedometer.id=='0D0')
                             &(ID_speedometer.d6=='FF'),1,0)
 ID_speedometer.reset_index(drop=True, inplace=True)
+
+# cols = ['id','payload','time','time_abs','ID_time_diff','label']
+# ID_speedometer = ID_speedometer[cols]
 ID_speedometer.name = 'Speedometer attack'
 #df = ID_speedometer
 # X_test = scaler.fit_transform(ID_speedometer[cols])
@@ -139,7 +144,7 @@ ID_speedometer.name = 'Speedometer attack'
 
 # **********************************************************************************************************************
 print('max_speedometer_mas...')
-max_speedometer_mas = '/Volumes/Personal/Phd/Data/road/attacks/max_speedometer_attack_1_masquerade.log'
+max_speedometer_mas = '/Users/sampathrajapaksha/Document-local/PhD/Data/road/attacks/max_speedometer_attack_1_masquerade.log'
 max_speedometer_mas = pd.read_csv(max_speedometer_mas, engine='python',header=None)
 max_speedometer_mas.columns =['CAN_frame']
 max_speedometer_mas = data_preprocessing(max_speedometer_mas)
@@ -159,7 +164,7 @@ ID_max_speedometer_mas.name = 'Max speedometer mas attack'
 
 # **********************************************************************************************************************
 print('corr_sig...')
-corr_sig = '/Volumes/Personal/Phd/Data/road/attacks/correlated_signal_attack_1.log'
+corr_sig = '/Users/sampathrajapaksha/Document-local/PhD/Data/road/attacks/correlated_signal_attack_1.log'
 corr_sig = pd.read_csv(corr_sig, engine='python',header=None)
 corr_sig.columns =['CAN_frame']
 corr_sig = data_preprocessing(corr_sig)
@@ -167,6 +172,8 @@ corr_sig = data_preprocessing(corr_sig)
 ID_corr_sig = corr_sig
 A_start = 1030000009.191851
 A_end = 1030000030.050109
+# A_start = 9.191851
+# A_end = 30.050109
 ID_corr_sig['label'] = np.where((ID_corr_sig.time>=A_start)
                        &(ID_corr_sig.time<=A_end)
                        &(ID_corr_sig.id=='6E0')
@@ -180,7 +187,7 @@ ID_corr_sig.name = 'corr_sig attack'
 
 # **********************************************************************************************************************
 print('corr_sig_mas...')
-corr_sig_mas = '/Volumes/Personal/Phd/Data/road/attacks/correlated_signal_attack_1_masquerade.log'
+corr_sig_mas = '/Users/sampathrajapaksha/Document-local/PhD/Data/road/attacks/correlated_signal_attack_1_masquerade.log'
 corr_sig_mas = pd.read_csv(corr_sig_mas, engine='python',header=None)
 corr_sig_mas.columns =['CAN_frame']
 corr_sig_mas = data_preprocessing(corr_sig_mas)
@@ -201,7 +208,7 @@ ID_corr_sig_mas.name = 'corr_sig_mas attack'
 
 # **********************************************************************************************************************
 print('reverse_light_on...')
-reverse_light_on = '/Volumes/Personal/Phd/Data/road/attacks/reverse_light_on_attack_1.log'
+reverse_light_on = '/Users/sampathrajapaksha/Document-local/PhD/Data/road/attacks/reverse_light_on_attack_1.log'
 reverse_light_on = pd.read_csv(reverse_light_on, engine='python',header=None)
 reverse_light_on.columns =['CAN_frame']
 reverse_light_on = data_preprocessing(reverse_light_on)
@@ -209,6 +216,8 @@ reverse_light_on = data_preprocessing(reverse_light_on)
 ID_reverse_light_on = reverse_light_on
 A_start = 1230000018.929177
 A_end = 1230000038.836015
+# A_start = 18.929177
+# A_end = 38.836015
 ID_reverse_light_on['label'] = np.where((ID_reverse_light_on.time>=A_start)
                        &(ID_reverse_light_on.time<=A_end)
                        &(ID_reverse_light_on.id=='0D0')
@@ -221,7 +230,7 @@ ID_reverse_light_on.name = 'reverse_light_on attack'
 
 # **********************************************************************************************************************
 print('reverse_light_on_mas...')
-reverse_light_on_mas = '/Volumes/Personal/Phd/Data/road/attacks/reverse_light_on_attack_1_masquerade.log'
+reverse_light_on_mas = '/Users/sampathrajapaksha/Document-local/PhD/Data/road/attacks/reverse_light_on_attack_1_masquerade.log'
 reverse_light_on_mas = pd.read_csv(reverse_light_on_mas, engine='python',header=None)
 reverse_light_on_mas.columns =['CAN_frame']
 reverse_light_on_mas = data_preprocessing(reverse_light_on_mas)
@@ -238,7 +247,7 @@ ID_reverse_light_on_mas.name = 'reverse_light_on_mas attack'
 
 # **********************************************************************************************************************
 print('reverse_light_off...')
-reverse_light_off = '/Volumes/Personal/Phd/Data/road/attacks/reverse_light_off_attack_1.log'
+reverse_light_off = '/Users/sampathrajapaksha/Document-local/PhD/Data/road/attacks/reverse_light_off_attack_1.log'
 reverse_light_off = pd.read_csv(reverse_light_off, engine='python',header=None)
 reverse_light_off.columns =['CAN_frame']
 reverse_light_off = data_preprocessing(reverse_light_off)
@@ -246,6 +255,8 @@ reverse_light_off = data_preprocessing(reverse_light_off)
 ID_reverse_light_off = reverse_light_off
 A_start = 1170000016.627923
 A_end = 1170000023.347311
+# A_start = 16.627923
+# A_end = 23.347311
 ID_reverse_light_off['label'] = np.where((ID_reverse_light_off.time>=A_start)
                                         &(ID_reverse_light_off.time<=A_end)
                                         &(ID_reverse_light_off.id=='0D0')
@@ -255,7 +266,7 @@ ID_reverse_light_off.name = 'reverse_light_off attack'
 
 # **********************************************************************************************************************
 print('reverse_light_off_mas...')
-reverse_light_off_mas = '/Volumes/Personal/Phd/Data/road/attacks/reverse_light_off_attack_1_masquerade.log'
+reverse_light_off_mas = '/Users/sampathrajapaksha/Document-local/PhD/Data/road/attacks/reverse_light_off_attack_1_masquerade.log'
 reverse_light_off_mas = pd.read_csv(reverse_light_off_mas, engine='python',header=None)
 reverse_light_off_mas.columns =['CAN_frame']
 reverse_light_off_mas = data_preprocessing(reverse_light_off_mas)
@@ -272,7 +283,7 @@ ID_reverse_light_off_mas.name = 'reverse_light_off_mas'
 
 # **********************************************************************************************************************
 print('max_engine...')
-max_engine = '/Volumes/Personal/Phd/Data/road/attacks/max_engine_coolant_temp_attack.log'
+max_engine = '/Users/sampathrajapaksha/Document-local/PhD/Data/road/attacks/max_engine_coolant_temp_attack.log'
 max_engine = pd.read_csv(max_engine, engine='python',header=None)
 max_engine.columns =['CAN_frame']
 max_engine = data_preprocessing(max_engine)
@@ -280,6 +291,8 @@ max_engine = data_preprocessing(max_engine)
 ID_max_engine = max_engine
 A_start = 1090000019.979080
 A_end = 1090000024.170183
+# A_start = 19.979080
+# A_end = 24.170183
 ID_max_engine['label'] = np.where((ID_max_engine.time>=A_start)
                        &(ID_max_engine.time<=A_end)
                        &(ID_max_engine.id=='4E7')
@@ -289,7 +302,7 @@ ID_max_engine.name = 'max_engine coolant temp attack'
 
 # **********************************************************************************************************************
 print('max_engine_mas...')
-max_engine_mas = '/Volumes/Personal/Phd/Data/road/attacks/max_engine_coolant_temp_attack_masquerade.log'
+max_engine_mas = '/Users/sampathrajapaksha/Document-local/PhD/Data/road/attacks/max_engine_coolant_temp_attack_masquerade.log'
 max_engine_mas = pd.read_csv(max_engine_mas, engine='python',header=None)
 max_engine_mas.columns =['CAN_frame']
 max_engine_mas = data_preprocessing(max_engine_mas)

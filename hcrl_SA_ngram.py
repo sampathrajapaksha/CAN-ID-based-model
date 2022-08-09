@@ -1,63 +1,117 @@
-import nltk
+# import libraries
+import tensorflow as tf
+from tensorflow.keras import backend as K
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.layers import Embedding, LSTM, Dense, Dropout, Bidirectional, BatchNormalization, GRU, Layer
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.optimizers import Adam
+from keras.models import load_model
+import pickle
+import numpy as np
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
-import random
-pd.set_option('display.max_columns',20)
-pd.set_option('display.max_colwidth', 10000)
-pd.set_option('display.float_format', '{:.6f}'.format)
-import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 import warnings
-warnings.filterwarnings('ignore')
-from time import time
-#import multiprocessing as mp
-import multiprocess as mp
-from datetime import datetime
-plt.rcParams["figure.figsize"] = [10,5]
+import time
 import seaborn as sns
-from sklearn.metrics import accuracy_score,classification_report,confusion_matrix
 from sklearn.svm import OneClassSVM
-import re
+import random
+import nltk
+import multiprocess as mp
 import pickle
+import dill
+dill.settings['recurse'] = True
 
-# data pre-processing
+# from road_attacks import ID_speedometer
 
+warnings.filterwarnings('ignore')
+from keras.callbacks import EarlyStopping
+
+
+# data preprocessing
+# data preprocessing
 def data_preprocessing(df):
-    df['time'], df['can'], df['ID'] = df['CAN_frame'].str.split('\s+',2).str
-    df['id'],df['payload'] = df['ID'].str.split('#').str
-    df = df[['id','payload','time']]
-    df['time'] = df['time'].str.replace(r"\(","")
-    df['time'] = df['time'].str.replace(r"\)","")
-    df['label'] = 0
 
-    # change datatypes
+    df = df.rename(columns={0: 'time', 1: 'id', 2: 'dlc', 3: 'payload'})
     cols = df.columns
     for i in cols:
         df[i] = df[i].astype('category')
 
     df['time'] = pd.to_numeric(df['time'])
-    sorted_df = df.sort_values(by=['time'])
+    df['time_abs'] = df.time - min(df.time)
 
-    return sorted_df
+    # create features for time difference and time diff for each id
+    df['time_dif'] = df['time_abs'].diff()
+    df['time_dif'] = df['time_dif'].fillna(df['time_dif'].mean())
+    df['ID_time_diff'] = df.groupby('id')['time_abs'].diff()
+    df['ID_time_diff'] = df['ID_time_diff'].fillna(df.groupby('id')['ID_time_diff'].transform('mean'))
 
-# %%
-# import benign.pkl dataset
-BenTrainSet = pd.read_pickle('/Volumes/Personal/Phd/Data/road/road_benign.pkl')
-# convert payload values to int
-payload_columns = ['d1_int', 'd2_int', 'd3_int', 'd4_int', 'd5_int', 'd6_int', 'd7_int', 'd8_int']
-for i in payload_columns:
-    BenTrainSet[i] = BenTrainSet[i].astype('int')
-print('dataset imported')
+    df['label'] = 0
 
-train = BenTrainSet
-train.reset_index(drop=True, inplace=True)
-print('train size ', train.shape)
+    return df
 
-extended_short = '/Volumes/Personal/Phd/Data/road/ambient/ambient_dyno_drive_basic_short.log'
-df_extended_short = pd.read_csv(extended_short, engine='python', header=None)
-df_extended_short.columns = ['CAN_frame']
-df_extended_short = data_preprocessing(df_extended_short)
-BenTestSet = df_extended_short
+#%%
+# benign period of the attack data take as the benign data
+# flooding
+flooding = pd.read_csv('/Volumes/Personal/Phd/Data/dataset/Soul/Flooding_dataset_KIA.txt', engine='python',header=None)
+flooding = flooding[:]
+flooding = data_preprocessing(flooding)
+flooding['id'] = flooding['id'].str[1:]
+flooding.loc[flooding[11] == 'T', 'label'] = 1
+flooding_benign = flooding[:60000] # to training dataset
+flooding = flooding[60000:]
+flooding.reset_index(drop=True, inplace=True)
+flooding.name = 'flooding'
+
+# fuzzy
+fuzzy = pd.read_csv('/Volumes/Personal/Phd/Data/dataset/Soul/Fuzzy_dataset_KIA.txt', engine='python',header=None)
+fuzzy = fuzzy[:]
+fuzzy = data_preprocessing(fuzzy)
+fuzzy['id'] = fuzzy['id'].str[1:]
+fuzzy.loc[fuzzy[11] == 'T', 'label'] = 1
+fuzzy_benign = fuzzy[:40000]
+fuzzy = fuzzy[40000:]
+fuzzy.reset_index(drop=True, inplace=True)
+fuzzy.name = 'fuzzy'
+
+# malfunction
+malfunction = pd.read_csv('/Volumes/Personal/Phd/Data/dataset/Soul/Malfunction153_dataset_KIA.txt', engine='python',header=None)
+malfunction = malfunction[:]
+malfunction = data_preprocessing(malfunction)
+malfunction['id'] = malfunction['id'].str[1:]
+malfunction.loc[malfunction[11] == 'T', 'label'] = 1
+malfunction_benign = malfunction[:40000]
+malfunction = malfunction[40000:]
+malfunction.reset_index(drop=True, inplace=True)
+malfunction.name = 'malfunction'
+
+# benign splits of attacks
+benign = [flooding_benign, fuzzy_benign, malfunction_benign]
+
+benign_df = pd.DataFrame().append(benign)
+
+# select a random number to split a sample dataset
+indx1 = random.randint(0,len(benign_df)-130000)
+indx2 = indx1 + 10000
+BenTestSet1 = benign_df[indx1:indx2]
+sorted_trip1_rest = benign_df[~benign_df.index.isin(BenTestSet1.index)]
+BenTrainSet1 = sorted_trip1_rest.copy()
+
+# append both datasets
+test_data = [BenTestSet1]
+train_data = [sorted_trip1_rest]
+
+BenTestSet = pd.DataFrame().append(test_data)
+BenTestSet = BenTestSet.reset_index(drop=True)
+BenTrainSet = pd.DataFrame().append(train_data)
+BenTrainSet = BenTrainSet.reset_index(drop=True)
+
+print('BenTestSet size :' + str(len(BenTestSet)))
+print('BenTrainSet size :' + str(len(BenTrainSet)))
+
 #%%
 # functions
 # frequency calculation
@@ -76,7 +130,7 @@ def calFreqAtt(my_array, my_columns):
     w_label_1 = len(tempData[tempData['label']==1])
     w_label_all = len(tempData)
 
-    if w_label_1/w_label_all > 0.01: # 0.001 for low frequent attacks, 0.01 for others
+    if w_label_1/w_label_all > 0.1: # 0.001 for low frequent attacks, 0.01 for others
         w_label = 1
     else:
         w_label = 0
@@ -113,13 +167,13 @@ def calRatio_3(my_array, my_columns):
             one_gram = ngrams[1].predict.head(1).to_list()
             pred_list.extend(one_gram)
 
-        if tempData.iloc[i,0] not in pred_list:
+        if tempData.iloc[i,1] not in pred_list:
             tempData.at[i,'alert'] = 'A'
 
     w_label_1 = len(tempData[tempData['label']==1])
     w_label_all = len(tempData)
 
-    if w_label_1/w_label_all > 0.01:
+    if w_label_1/w_label_all > 0.1:
         w_label = 1
     else:
         w_label = 0
@@ -148,24 +202,23 @@ def calRatio_2(my_array, my_columns):
         #             one_gram = ngrams[1].predict.head(5).to_list()
         #             pred_list.extend(one_gram)
 
-        if tempData.iloc[i,0] not in pred_list:
+        if tempData.iloc[i,1] not in pred_list:
             tempData.at[i,'alert'] = 'A'
 
     w_label_1 = len(tempData[tempData['label']==1])
     w_label_all = len(tempData)
 
-    if w_label_1/w_label_all > 0.01:
+    if w_label_1/w_label_all > 0.1:
         w_label = 1
     else:
         w_label = 0
 
     return len(tempData[tempData['alert']=='A'])/len(tempData[tempData['alert']=='B']), w_label
 
-
 #%%
 # N-Gram Analysis
-
-tempId = pd.Series(train['id'])
+# BenTrainSet = BenTrainSet[:50000]
+tempId = pd.Series(BenTrainSet['id'])
 print("Total number of ids :"+ str(len(tempId)))
 tempId = tempId.str.cat(sep=' ')
 
@@ -178,7 +231,7 @@ def extract_ngrams(data, num):
     return [ ' '.join(grams) for grams in n_grams]
 
 ngrams = list()
-for i in range(1,7):
+for i in range(1,5):
     ngram_fd = nltk.FreqDist(extract_ngrams(data,i))
     ngrams_df = pd.DataFrame(ngram_fd.items(), columns=['ngram', 'freq'])
     ngrams_df = ngrams_df.sort_values(by=['freq'], ascending=False)
@@ -190,7 +243,7 @@ ngrams = [None]+ ngrams
 # Step 1 - split ngram in xgram + last word
 
 ngrams_pred = list()
-for n in range(1,7):
+for n in range(1,5):
     df = ngrams[n]
     if n==1:
         df['predict']=df['ngram']
@@ -207,7 +260,7 @@ ngrams = [None]+ ngrams
 
 # Step 2 - calculate ML
 ngrams_ml = list()
-for n in range(1,7):
+for n in range(1,5):
     df = ngrams[n]
     if n==1:
         df['ml']=df['freq']/df['freq'].sum()
@@ -228,10 +281,10 @@ ngrams = [None]+ ngrams
 # time-based threshold estimation
 #genarate values to use as time for make time intervales
 
-trip_val = BenTestSet[:50000]
+trip_val = BenTestSet
 trip_val = trip_val.reset_index(drop=True)
 
-wndowSize = 0.3
+wndowSize = 0.1
 numWindows = (trip_val.time.max()-trip_val.time.min())/wndowSize
 #benWinLimit = round((testSet.time[len(BenTestSet)]-testSet.time.min())/wndowSize)
 
@@ -243,16 +296,16 @@ stopValue = startValue+wndowSize
 print(mp.cpu_count())
 pool = mp.Pool(mp.cpu_count())
 
-start = time()
+# start = time.time()
 print('Parallel processing started...')
 ratio_list_th = [pool.apply(calFreq, args=(trip_val[(trip_val.time >= startValue + ((i-1)*wndowSize)) & (trip_val.time < startValue + ((i)*wndowSize))].to_numpy(),trip_val.columns)) for i in range(1,int(numWindows-1))]
 
 pool.close()
 
-end = time()
+# end = time.time()
 
 k_list = list(range(1, int(numWindows-1)))
-print((end - start)/3600)
+# print((end - start))
 
 print('Max :', max(ratio_list_th))
 print('Min :', min(ratio_list_th))
@@ -260,7 +313,7 @@ print('Min :', min(ratio_list_th))
 #%%
 # n-gram threshold estimation
 
-trip_val = BenTestSet[:50000]
+trip_val = BenTestSet
 trip_val = trip_val.reset_index(drop=True)
 
 wndowSize = 0.1
@@ -274,13 +327,13 @@ stopValue = startValue+wndowSize
 print(mp.cpu_count())
 pool = mp.Pool(mp.cpu_count())
 
-start = time()
+start = time.time()
 print('Parallel processing started...')
 est_ratio_list = [pool.apply(calRatio_2, args=(trip_val[(trip_val.time >= startValue + ((i-1)*wndowSize)) & (trip_val.time < startValue + ((i)*wndowSize))].to_numpy(),trip_val.columns)) for i in range(1,int(numWindows-1))]
 
 pool.close()
 
-end = time()
+end = time.time()
 
 k_list = list(range(1, int(numWindows-1)))
 print((end - start))
@@ -294,22 +347,17 @@ print('N_gram threshold:', max(est_freq))
 two_gram_threshold = max(est_freq)
 
 #%%
-# Attacks
-attacks = [ID_fuzzing, ID_speedometer, ID_max_speedometer_mas, ID_corr_sig, ID_corr_sig_mas, ID_reverse_light_on,
-           ID_reverse_light_on_mas, ID_reverse_light_off, ID_reverse_light_off_mas]
-# attacks = [ID_fuzzing]
-# attacks = [ID_max_engine_mas]
+attacks = [flooding, fuzzy, malfunction]
 
 # attack dataset frequency
 for i in attacks:
     # convert df data into a series
+    name = i.name
     print('Attack : ', i.name)
     Attack_dataset = i
 
     wndowSize = 0.1
     numWindows = (Attack_dataset.time.max()-Attack_dataset.time.min())/wndowSize
-    AttStart = round((A_start-Attack_dataset.time.min())/wndowSize)
-    AttEnd = round((A_end-Attack_dataset.time.min())/wndowSize)
 
     startValue = Attack_dataset.time.min()
     stopValue = startValue+wndowSize
@@ -318,20 +366,16 @@ for i in attacks:
     print(mp.cpu_count())
     pool = mp.Pool(mp.cpu_count())
 
-    start = time()
+    # start = time()
     print('Parallel processing started for frequency...')
     attack_freq = [pool.apply(calFreqAtt, args=(Attack_dataset[(Attack_dataset.time >= startValue + ((i-1)*wndowSize))
                                                                & (Attack_dataset.time < startValue + ((i)*wndowSize))].to_numpy(),Attack_dataset.columns)) for i in range(1,int(numWindows-1))]
 
     # pool.close()
 
-    end = time()
+    # end = time()
 
     k_list_attack = list(range(1, int(numWindows-1)))
-    # print('k_list size :', len(k_list_attack))
-    # print((end - start))
-    # print('AttStart :', AttStart)
-    # print('AttEnd :', AttEnd)
 
     fuzzing_freq = []
     for i in range(len(attack_freq)):
@@ -343,41 +387,21 @@ for i in attacks:
         l = attack_freq[i][1]
         fuzzing_label.append(l)
 
-    # y_pred = []
-    # for i in range(len(fuzzing_freq)):
-    #     if fuzzing_freq[i]> 257:
-    #         y_pred.append(1)
-    #     else:
-    #         y_pred.append(0)
-
     y_true = fuzzing_label
-
-    # print(classification_report(y_true, y_pred))
-    # cm = confusion_matrix(y_true, y_pred)
-    # print(cm)
-    #
-    # TN = cm[0][0]
-    # FN = cm[1][0]
-    # TP = cm[1][1]
-    # FP = cm[0][1]
-    # print('FP rate', FP*100/(FP+TN))
-    # print('FN rate', FN*100/(FN+TP))
 
 
     # n_gram calculation
-    start = time()
+    # start = time()
     print('Parallel processing started for n-grams...')
-    attack_freq_ngram = [pool.apply(calRatio_3, args=(Attack_dataset[(Attack_dataset.time >= startValue + ((i-1)*wndowSize)) & (Attack_dataset.time < startValue + ((i)*wndowSize))].to_numpy(),Attack_dataset.columns)) for i in range(1,int(numWindows-1))]
+    attack_freq_ngram = [pool.apply(calRatio_2, args=(Attack_dataset[(Attack_dataset.time >= startValue + ((i-1)*wndowSize)) & (Attack_dataset.time < startValue + ((i)*wndowSize))].to_numpy(),Attack_dataset.columns)) for i in range(1,int(numWindows-1))]
 
     pool.close()
 
-    end = time()
+    # end = time()
 
     k_list_attack = list(range(1, int(numWindows-1)))
     print('k_list size :', len(k_list_attack))
-    print((end - start))
-    # print('AttStart :', AttStart)
-    # print('AttEnd :', AttEnd)
+    # print((end - start))
 
     fuzzing_ratio = []
     for i in range(len(attack_freq_ngram)):
@@ -386,7 +410,7 @@ for i in attacks:
 
     y_pred = []
     for i in range(len(fuzzing_ratio)):
-        if fuzzing_ratio[i]> 0.008:
+        if fuzzing_ratio[i]> 0.05:
             y_pred.append(1)
         else:
             y_pred.append(0)
@@ -404,8 +428,20 @@ for i in attacks:
     print('FP rate', FP*100/(FP+TN))
     print('FN rate', FN*100/(FN+TP))
 
- #%%
-# n-gram model for attacks
+    plt.rcParams["figure.figsize"] = [10,5]
+    plt.plot(k_list_attack, fuzzing_ratio)
+    plt.title(name)
+    plt.xlabel('window number')
+    plt.ylabel('message frequence')
+    plt.axhline(y=0.05, ls ='--', color = 'red')
+    plt.show()
 
-sns.kdeplot(est_freq, fill=True)
+#%%
+# window = 0.3
+plt.rcParams["figure.figsize"] = [10,5]
+plt.plot(k_list_attack, fuzzing_ratio)
+plt.title(flooding.name)
+plt.xlabel('window number')
+plt.ylabel('message frequence')
+plt.axhline(y=0.22, ls ='--', color = 'red')
 plt.show()
