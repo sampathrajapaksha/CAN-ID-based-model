@@ -451,7 +451,7 @@ for i in attacks:
     print()
 
 # %%
-# ensemble model
+# Ensemble model predictions
 # true_window , gru_list, payload_list, time_list
 
 or_list = [a or b or c for a,b,c in zip(gru_list, time_list, payload_list)]
